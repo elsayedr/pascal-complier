@@ -69,6 +69,7 @@ void yyerror(const char *);
     TYPE  y_type;
     PARAM_LIST y_paralist;
     INDEX_LIST y_indexlist;
+    ID_LIST y_idlist;
 }
 
 %token <y_string>LEX_ID
@@ -83,8 +84,9 @@ void yyerror(const char *);
 %type <y_type> unpacked_structured_type
 
 %type <y_paralist> procedural_type_formal_parameter_list procedural_type_formal_parameter
-%type <y_paralist> optional_procedural_type_formal_parameter_list id_list
+%type <y_paralist> optional_procedural_type_formal_parameter_list 
 %type <y_indexlist> array_index_list
+%type <y_idlist> id_list
 %type <y_int> constant number unsigned_number
 
 /* Reserved words. */
@@ -192,14 +194,17 @@ optional_par_id_list:
   
   
 //edited by ygao   3/22/2011 9:59AM
+//edited by ygao   3/22/2011 5:46PM
 id_list:
     new_identifier
   {
-  	$$ =  tr_create_para($1);
+//  	$$ =  tr_create_para($1);
+		$$ = tr_create_idlist($1);
   }
   | id_list ',' new_identifier
   {
-  	$$ = tr_add_para($1, tr_create_para($3));
+//  	$$ = tr_add_para($1, tr_create_para($3));
+		$$ = tr_add_idlist($1, tr_create_idlist($3));
   };
 
 typename:
@@ -486,17 +491,20 @@ procedural_type_formal_parameter_list:
 //edited by ygao   3/22/2011 10:02AM
 procedural_type_formal_parameter:
     id_list
-  {}| id_list ':' typename
   {
-  	$$ = tr_edit_para($1, $3, FALSE);
+  	$$ = tr_create_para($1, NULL,  FALSE);
+  }
+  | id_list ':' typename
+  {
+  	$$ = tr_create_para($1, $3, FALSE);
   }
   | LEX_VAR id_list ':' typename
   {
-  	$$ = tr_edit_para($2, $4, TRUE);
+  	$$ = tr_create_para($2, $4, TRUE);
   }
   | LEX_VAR id_list
   {
-  	$$ = tr_edit_para($2, NULL, TRUE);
+  	$$ = tr_create_para($2, NULL, TRUE);
   };
 
 new_structured_type:
@@ -623,9 +631,12 @@ variable_declaration_list:
   {}| variable_declaration_list variable_declaration
   {};
 
+//edited by ygao   3/22/2011 6:22PM
 variable_declaration:
     id_list ':' type_denoter semi
-  {};
+  {
+  	tr_install_idlist($1, $3);
+  };
 
 function_declaration:
     function_heading semi directive_list semi

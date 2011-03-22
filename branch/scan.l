@@ -9,6 +9,7 @@
 
 #include "defs.h"
 #include "types.h"
+#include "tree.h"
 #include "symtab.h"
 #include "message.h"
 /* defined in defs.h */
