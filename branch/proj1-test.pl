@@ -3,8 +3,8 @@
 # Perl script for testing CSCE 531 proj1 submissions
 
 # edit as needed
-$submissionRoot = "/class/csce531-001/submissions";
-$testSuiteDir = "/class/csce531-001/handouts/pas-proj1";
+$submissionRoot = "./submissions";
+$testSuiteDir = ".";
 $hwDir = 'pas-proj1';
 $testFilePrefix = 'T1L';
 $timeout = 11;			# seconds

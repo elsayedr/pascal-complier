@@ -620,10 +620,10 @@ void ty_print_class(STORAGE_CLASS tag)
 /****************************************************************/
 void ty_print_paramlist(PARAM_LIST params)
 {
-
     if (params == NULL)
     {
 	msgn(" <no params>");
+
 	return;
     }
 
@@ -770,7 +770,9 @@ void print_type(TYPE_REC * typein, BOOLEAN recurse_flag,
 	break;
 
     case TYFUNC:
+
 	object = ty_query_func(typein,&params,&check_args);
+
 	if (ty_query(object) == TYVOID)
 	{
 	    msgn("procedure");

@@ -38,7 +38,7 @@ BACKEND = backend-x86
 
 PPC3H	= defs.h types.h symtab.h tree.h $(BACKEND).h
 
-PPC3OBJ = main.o message.o symtab.o types.o utils.o gram.o scan.o tree.o $(BACKEND).o
+PPC3OBJ = main.o message.o symtab.o types.o utils.o gram.o scan.o tree.o encode.o $(BACKEND).o
 
 # ppc3 rules
 #
@@ -60,6 +60,8 @@ message.o: message.c message.h defs.h
 utils.o: utils.c symtab.h message.h defs.h $(BACKEND).h
 
 tree.o: symtab.c types.h symtab.h message.h
+
+encode.o: encode.c
 
 gram.o : gram.y $(PPC3H)
 	$(YACC) $(YFLAGS) gram.y

@@ -14,6 +14,13 @@ typedef void (*user_func)();
 /****************************************************************************/
 /* 
 	definitions for symbol table data record
+ECONST  - Enumerated constant.  You won't use this, because we are not supporting enumerated types.
+GDECL    - Global declaration.  Variables declared in the "var" section of the program get this tag.
+LDECL     - Local declaration.  Used for local variables (starting with Project II)
+PDECL     - Parameter declaration.  Use this for formal parameters to functions and procedures.
+FDECL     - Function or procedure name (starting with Project II).
+TYPENAME - Type name.  Use this for installing names defined (to the left of '=') in the "type" section of the Program.
+
 */
 
 typedef enum {ECONST, GDECL, LDECL, PDECL, FDECL, TYPENAME} STDR_TAG;

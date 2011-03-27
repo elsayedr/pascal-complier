@@ -168,7 +168,7 @@ void yyerror(const char *);
 pascal_program:
     /* empty */
   {}| program_component_list
-  {printf("let's start!\n");};
+  {};
 
 program_component_list:
     program_component
@@ -185,7 +185,9 @@ main_program_declaration:
 
 program_heading:
     LEX_PROGRAM new_identifier optional_par_id_list
-  {};
+  {
+  	tr_add_program($2);
+  };
 
 optional_par_id_list:
     /* empty */
@@ -198,13 +200,12 @@ optional_par_id_list:
 id_list:
     new_identifier
   {
-//  	$$ =  tr_create_para($1);
 		$$ = tr_create_idlist($1);
+		
   }
   | id_list ',' new_identifier
   {
-//  	$$ = tr_add_para($1, tr_create_para($3));
-		$$ = tr_add_idlist($1, tr_create_idlist($3));
+		$$ = tr_add_idlist($1, $3);
   };
 
 typename:
@@ -384,7 +385,9 @@ string:
 
 type_definition_part:
     LEX_TYPE type_definition_list semi
-  {};
+  {
+  	tr_type_resolve();
+  };
 
 type_definition_list:
     type_definition
@@ -395,13 +398,14 @@ type_definition:
     new_identifier '=' type_denoter
   {
   	tr_make_type($1, $3);
-  	printf("we have a new type.\n");
+  	//st_dump();
+  	//printf("we have a new type.\n");
   };
 
 type_denoter:
     typename
   {
-  	$$ = tr_get_type($1);
+  	$$ = tr_get_type_no_pointer($1);
   }
   | type_denoter_1
   {};
@@ -442,7 +446,7 @@ subrange_type:
 new_pointer_type:
     pointer_char pointer_domain_type
   {
-  $$ = tr_create_pointer_type($2);
+  	$$ = $2;
   };
 
 pointer_char:
@@ -454,25 +458,30 @@ pointer_char:
 pointer_domain_type:
    new_identifier
   {
-  	$$ = tr_get_type($1);
-  	//printf("type:%s\n", $1);
+  	  $$ = tr_create_normal_pointer_type($1);
+  	  
   }
   | new_procedural_type
-  {};
+  {
+  	$$ = tr_create_func_pointer_type($1);
+  };
 
 new_procedural_type:
     LEX_PROCEDURE optional_procedural_type_formal_parameter_list
   {
-  	$$ = tr_create_func_type(NULL, $2, FALSE);
+  	$$ = tr_create_func_type(NULL, $2, TRUE);
   }
   | LEX_FUNCTION optional_procedural_type_formal_parameter_list functiontype
   {
-  	$$ = tr_create_func_type($3, $2, FALSE);
+  	$$ = tr_create_func_type($3, $2, TRUE);
   };
 
 optional_procedural_type_formal_parameter_list:
     /* empty */
-  {}| '(' procedural_type_formal_parameter_list ')'
+  {
+  	// no paramter
+  	$$ = NULL;
+  }| '(' procedural_type_formal_parameter_list ')'
   {
   	$$ = $2;
   };
@@ -481,7 +490,7 @@ optional_procedural_type_formal_parameter_list:
 procedural_type_formal_parameter_list:
     procedural_type_formal_parameter
   {
-  	$$ = tr_add_para(NULL, $1);
+  	$$ = $1;
   }
   | procedural_type_formal_parameter_list semi procedural_type_formal_parameter
   {
@@ -492,7 +501,7 @@ procedural_type_formal_parameter_list:
 procedural_type_formal_parameter:
     id_list
   {
-  	$$ = tr_create_para($1, NULL,  FALSE);
+  	//$$ = tr_create_para($1, NULL,  FALSE);
   }
   | id_list ':' typename
   {
@@ -504,7 +513,7 @@ procedural_type_formal_parameter:
   }
   | LEX_VAR id_list
   {
-  	$$ = tr_create_para($2, NULL, TRUE);
+  	//$$ = tr_create_para($2, NULL, TRUE);
   };
 
 new_structured_type:
@@ -636,6 +645,7 @@ variable_declaration:
     id_list ':' type_denoter semi
   {
   	tr_install_idlist($1, $3);
+  	gen_var_asm($1);
   };
 
 function_declaration:
