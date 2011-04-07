@@ -46,6 +46,7 @@
 %{
 #include "types.h"
 #include "tree.h"
+#include "encode.h"
 #include "backend-x86.h"
 
 /* Cause the `yydebug' variable to be defined.  */
@@ -123,7 +124,7 @@ EXPR expr_temp;
 %type <y_exprid> variable_or_function_access_maybe_assignment
 
 %type <y_string> identifier combined_string string
-%type <y_funchead> function_heading
+%type <y_funchead> function_heading program_heading
 /* Reserved words. */
 
 /* Reserved words in Standard Pascal */
@@ -218,13 +219,17 @@ main_program_declaration:
     program_heading semi import_or_any_declaration_part statement_part
   {
   	//get out of the func
-  	b_func_epilogue("main");
+//  	b_func_epilogue("main");
+	gen_process_prgm_tail( $1 );
+  	tr_funchead_pop();
   };
 
 program_heading:
     LEX_PROGRAM new_identifier optional_par_id_list
   {
-  	tr_add_program($2);
+//  	tr_add_program($2);
+	$$ = tr_install_func($2 , tr_create_func_type(NULL, NULL, TRUE));
+  	tr_funchead_push($$);
   };
 
 optional_par_id_list:
@@ -318,7 +323,8 @@ import_or_any_declaration_part:
     any_declaration_import_part
   {
     	//after declearation, generate main here
-  	b_func_prologue("main");
+//  	b_func_prologue("main");
+  	gen_process_prgm_head( tr_funchead_peep());
   };
 
 any_declaration_import_part:
@@ -336,15 +342,15 @@ any_declaration_part:
   {
   	if( tr_funchead_peep() != NULL )
   	{
-		tr_process_func_head( tr_funchead_peep());
-		tr_process_local_vars();
+		gen_process_func_head( tr_funchead_peep());
+		gen_process_local_vars();
 	}
   }| any_declaration_part any_decl
   {
   	if( tr_funchead_peep() != NULL )
   	{
-		tr_process_func_head( tr_funchead_peep());
-		tr_process_local_vars();
+		gen_process_func_head( tr_funchead_peep());
+		gen_process_local_vars();
 	}
   };
 
@@ -737,7 +743,7 @@ function_declaration:
   | function_heading semi any_declaration_part statement_part semi
   {
   	
-  	tr_process_func_tail( $1 );
+  	gen_process_func_tail( $1 );
   	tr_funchead_pop();
   };
 
@@ -763,7 +769,7 @@ directive_list:
 directive:
     LEX_FORWARD
   {
-  	$$ = NO_SC;
+  	$$ = STATIC_SC;
   }
   | LEX_EXTERNAL
   {
@@ -977,11 +983,11 @@ goto_statement:
 optional_par_actual_parameter_list:
     /* empty */
   {
-//  	tr_process_actual_para_list(NULL);
+//  	gen_process_actual_para_list(NULL);
   }| '(' actual_parameter_list ')'
   {
   	//printf("$$$$$$$$$$$$$$$$\n");
-//    tr_process_actual_para_list($2);
+//    gen_process_actual_para_list($2);
   };
 
 actual_parameter_list:
@@ -1011,28 +1017,42 @@ assignment_or_call_statement:
   {
   		if($2 != NULL)
   		{
-//  			tr_tree_eval($1->expr);
+//  			gen_tree_asm($1->expr);
 //printf("1::::::::::::::::::");
-  			tr_tree_eval($2);
-  			
-  			$$ = tr_do_assignment($1, $2, tr_funchead_peep());
+			if($1 != NULL)
+			{
+    			if(tr_check_assignment($1->expr) == TRUE)
+    			{
+      				gen_tree_asm($2);
+      				$$ = gen_do_assignment($1, $2, tr_funchead_peep());
+      			}
+      		}
   		}
 
   		else
   		{
 //  			printf("2::::::::::::::::::");
-  			tr_tree_eval($1->expr);
+				
+			if( $1 != NULL )
+			{
+				tr_check_proc($1->expr);
+  				gen_tree_asm($1->expr);
+  			}
   		}
   };
 
 variable_or_function_access_maybe_assignment:
     identifier
   {
+//  	printf(">>>>>>>>>>>id access\n");
+  	fflush(stdout);
   	$$ = tr_make_expr_id( NULL, $1, tr_funchead_peep());
   }
   | address_operator variable_or_function_access
   {}| variable_or_function_access_no_id
   {
+//  	printf(">>>>>>>>>>>no id access\n");
+  	fflush(stdout);
   	$$ = tr_make_expr_id( $1, NULL, tr_funchead_peep());
   };
 
@@ -1064,7 +1084,7 @@ standard_procedure_statement:
   {
 //  	printf("@@@@@@@@@@@@@@@@@@@2\n");
   	$$ = tr_make_unop_node(DISPOSE_OP, $3);
-  	tr_tree_eval($$);
+  	gen_tree_asm($$);
   }| p_DISPOSE '(' actual_parameter ',' actual_parameter_list ')'
   {
 //  	$$ = tr_make_exprlist($5, $3);
@@ -1225,13 +1245,13 @@ factor:
     variable_or_function_access
   {
   	//printf("$$$$$$$$$$$$$function access\n");
-  	  	//tr_tree_eval($1);
+  	  	//gen_tree_asm($1);
   }| constant_literal
   {
-  	//tr_tree_eval($1);
+  	//gen_tree_asm($1);
   }| unsigned_number
   {
-  	//tr_tree_eval($1);
+  	//gen_tree_asm($1);
   }| set_constructor
   {}| LEX_NOT signed_factor
   {}| address_operator factor
@@ -1274,12 +1294,12 @@ variable_or_function_access_no_id:
   {
 //    	printf("4######################3");
 //  		fflush(stdout);
-  	 tr_process_actual_para_list($3);
+  	 gen_process_actual_para_list($3);
   }| p_NEW '(' variable_access_or_typename ')'
   {
 //  	printf("~~~~~~~~~~~~~~~~~~~~~~~~~");
   	$$ = tr_make_unop_node(NEW_OP, $3);
-//  	tr_tree_eval($$);
+//  	gen_tree_asm($$);
   };
 
 set_constructor:

@@ -56,8 +56,8 @@ TYPE get_type_by_id(ST_ID bucket_rec)
 		stack_rec =  st_lookup(bucket_rec, &block);
 		if( stack_rec != NULL)
 		{
-			if( stack_rec->tag != TYPENAME)
-				warning("the stack record found is not a type\n");
+//			if( stack_rec->tag != TYPENAME)
+//				warning("the stack record found is not a type\n");
 			return stack_rec->u.typename.type;
 		}
 		else
@@ -101,30 +101,6 @@ int tr_make_type(char *id, TYPE typeIn)
 	return 0;
 }
 
-TYPE tr_get_type_id(ST_ID bucket_rec)
-{
-	ST_DR stack_rec;
-	int block;
-	//look for record on hash
-	//if it does not exit, create one hash record
-	//if yes, go for it on the stack
-	if( bucket_rec != NULL)
-	{
-		stack_rec =  st_lookup(bucket_rec, &block);
-		if( stack_rec != NULL)
-		{
-			if( stack_rec->tag != TYPENAME)
-				warning("the stack record found is not a type\n");
-			return stack_rec->u.typename.type;
-		}
-		else
-		{
-//			error("Undeclared type name: \"%s\"", itm);
-		}
-	}
-	return NULL;
-}
-
 // get type by its name
 // for non-pointer type, use tr_get_type_no_pointer
 TYPE tr_get_type(char *itm)
@@ -141,8 +117,8 @@ TYPE tr_get_type(char *itm)
 		stack_rec =  st_lookup(bucket_rec, &block);
 		if( stack_rec != NULL)
 		{
-			if( stack_rec->tag != TYPENAME)
-				warning("the stack record found is not a type\n");
+//			if( stack_rec->tag != TYPENAME)
+//				warning("the stack record found is not a type\n");
 			return stack_rec->u.typename.type;
 		}
 		else
@@ -170,8 +146,8 @@ TYPE tr_get_type_no_pointer(char *itm)
 		stack_rec =  st_lookup(bucket_rec, &block);
 		if( stack_rec != NULL)
 		{
-			if( stack_rec->tag != TYPENAME)
-				warning("the stack record found is not a type\n");
+//			if( stack_rec->tag != TYPENAME)
+//				warning("the stack record found is not a type\n");
 			return stack_rec->u.typename.type;
 		}
 		else
@@ -534,6 +510,8 @@ FUNC_HEAD tr_install_func(char* funcname , TYPE typeIn)
 {
 	int ret;
 	ST_DR dr;
+	int block;
+	
 	FUNC_HEAD funchead = (FUNC_HEAD)malloc(sizeof(PTR_OBJ));
 	
 	dr = stdr_alloc();
@@ -541,6 +519,9 @@ FUNC_HEAD tr_install_func(char* funcname , TYPE typeIn)
 	dr->u.decl.type = typeIn;
 	dr->u.decl.v.global_func_name = funcname;
 	dr->u.decl.sc = NO_SC;
+//	dr->u.decl.sc = 2;
+//printf("install >>>%s\n", funcname);
+//	printf("############### sc:%d\n", dr->u.decl.sc);
 	if(ty_query(typeIn) == TYERROR)
 		dr->u.decl.err = TRUE;
 	else
@@ -549,7 +530,12 @@ FUNC_HEAD tr_install_func(char* funcname , TYPE typeIn)
 	funchead->type = typeIn;
 	funchead->funname = funcname;
 	ret = st_install(funchead->id,dr);
-
+	if( ret == FALSE)
+	{
+		dr = st_lookup(st_lookup_id(funcname), &block);
+		dr->u.decl.err = TRUE;
+	}
+//	printf("<<<<<<<<<<<<<<<< err:%d\n", dr->u.decl.err);
 	return funchead;
 }
 
@@ -560,14 +546,21 @@ BOOLEAN tr_set_func_sc(FUNC_HEAD funchead, STORAGE_CLASS sc_in)
 	int block;
 	if( funchead != NULL )
 	{
-//		printf("%s\n", funcname);
+//		printf("set >>>>%s\n", funchead->funname);
 		bucket_rec = funchead->id;
 		stack_rec = st_lookup(bucket_rec, &block);
 		if( stack_rec != NULL )
 		{
-//			printf("############### find the func\n");
-//			printf("############### sc:%d\n", stack_rec->u.decl.sc);
+//			printf("1############## sc:%d\n", stack_rec->u.decl.sc);
 			stack_rec->u.decl.sc = sc_in;
+//						printf("############### find the func\n");
+			
+//			printf(">>>>>>>>>>>>> err%d\n", stack_rec->u.decl.err);
+			if(stack_rec->u.decl.err == TRUE 
+				&& (sc_in == EXTERN_SC || sc_in == STATIC_SC) )
+			{
+				ty_error_report(DUP_FUNC_EX_FW, NULL);
+			}
 		}
 		else
 		{
@@ -618,8 +611,14 @@ EXPR tr_make_strval_node(char* strval)
 EXPR tr_make_gid_node(char *gid_name)
 {
 //	printf("eeeeeeeeeeeeeeeeeeeeewgid name:%s\n", gid_name);
+//	fflush(stdout);
 //	printf("%d\n", ty_query(tr_get_type(gid_name)));
 	ST_ID gid = st_lookup_id(gid_name);
+	if(gid == NULL)
+	{
+		ty_error_report(UNDEC_ID, gid_name );
+		return NULL;
+	}
 	EXPR ptree = (EXPR)malloc(sizeof(EXPR_NODE));
 	int block;
 	PARAM_LIST params;
@@ -627,22 +626,25 @@ EXPR tr_make_gid_node(char *gid_name)
 	ST_DR stack_rec;
 	stack_rec = st_lookup(gid, &block);
 	
-	ptree->tag = GID;
+	
 	ptree->u.gid = gid;
 	if( ty_query( tr_get_type(gid_name)) == TYFUNC)
 	{
+		ptree->tag = FCALL;
+//		error("eeeeeeeeeeeeeeeeeeeeewgid name:%s\n", gid_name);	
 		ptree->type = ty_query_func(tr_get_type(gid_name), &params, &check_args);
-		// we don't check the extern function's arg
+		// prinf and scanf are special, they don't have fixed length argument list
 		if(params == NULL && strncasecmp (gid_name, "printf") != 0 &&  strncasecmp (gid_name, "scanf") != 0)
 		{
-			tr_process_actual_para_list(NULL);
+			gen_process_actual_para_list(NULL);
 //			printf("eeeeeeeeeeeeeeeeeeeeewgid name:%s\n", gid_name);	
 		}
-//		else
-//			printf("wwwwwwwwwwwwwwwwwwwwgid name:%s\n", gid_name);	
 	}
 	else
+	{
+		ptree->tag = GID;
 		ptree->type = get_type_by_id(gid);
+	}
 	ptree->name = gid_name;
 //		printf("????????%d\n", alloc_arglist_or_not);
 	return ptree;
@@ -696,262 +698,6 @@ EXPR tr_make_fcall_node(EXPR_LIST args, EXPR node)
 	return NULL;
 }
 
-TYPETAG tr_get_expr_type(EXPR exprIn)
-{
-	return ty_query(exprIn->type);
-}
-
-void tr_tree_eval(EXPR exprIn)
-{
-//	printf(">>>>>>>>type:%d\n", exprIn->tag);
-	TYPETAG from_type;
-	TYPETAG to_type;
-	TYPETAG left_type;
-	TYPETAG right_type;
-	TYPETAG temp_type_tag;
-	TYPE temp_type;
-	int block;
-	ST_DR stack_rec;
-	ST_ID bucket_rec;
-	
-//	printf("ok!!!!!!!!!!!!!!!!!!!!!!!\n");
-//	printf("%d!\n", exprIn->tag);
-	if( exprIn->tag == INTCONST )
-	{
-		b_push_const_int(exprIn->u.intval);
-	}
-	else if( exprIn->tag == REALCONST)
-	{
-		b_push_const_double(exprIn->u.realval);
-	}
-	else if( exprIn->tag == STRCONST)
-	{
-		b_push_const_string(exprIn->u.strval);
-	}
-	else if(exprIn->tag == GID)
-	{
-		stack_rec = st_lookup(exprIn->u.gid, &block);
-		if( stack_rec->tag == FDECL )
-		{
-			b_funcall_by_name (exprIn->name, ty_query(exprIn->type));
-		}
-		else
-		{
-			b_push_ext_addr(exprIn->name);
-//			if( tr_get_expr_type(exprIn) != TYPTR)
-				b_deref(tr_get_expr_type(exprIn));
-			if( tr_get_expr_type(exprIn) == TYFLOAT )
-			{
-				b_convert (TYFLOAT, TYDOUBLE);
-				exprIn->type = ty_build_basic(TYDOUBLE);
-			}
-			else if( tr_get_expr_type(exprIn) == TYUNSIGNEDCHAR )
-			{
-//				printf("start convert");
-				fflush(stdout);
-				b_convert (TYUNSIGNEDCHAR, TYSIGNEDLONGINT);
-				exprIn->type = ty_build_basic(TYSIGNEDLONGINT);
-//				b_convert (TYUNSIGNEDCHAR, TYUNSIGNEDLONGINT);
-//				exprIn->type = ty_build_basic(TYUNSIGNEDLONGINT);
-			}
-		}
-	}
-	else if(exprIn->tag == UNOP)
-	{
-		switch( exprIn->u.unop.op ) 
-		{
-			case DISPOSE_OP:
-				b_alloc_arglist(4);
-				tr_tree_eval(exprIn->u.unop.operand);
-				b_load_arg (TYPTR);
-				b_funcall_by_name ("free", TYVOID);
-				break;
-				
-			case DEREF_OP:
-				tr_tree_eval(exprIn->u.unop.operand);
-				b_deref (ty_query(ty_query_ptr(exprIn->u.unop.operand->type, &bucket_rec, &temp_type)));
-				break;
-			case NEW_OP:
-				b_push_ext_addr(exprIn->u.unop.operand->name);
-//				b_push_ext_addr(exprIn->u.unop.operand->name);
-				b_alloc_arglist(4);
-				temp_type_tag = ty_query(ty_query_ptr(exprIn->type, &bucket_rec, &temp_type));
-				if( temp_type_tag == TYDOUBLE )
-					b_push_const_int(8);
-				else	
-					b_push_const_int(4);
-//				b_load_arg (ty_query(ty_query_ptr(exprIn->type, &bucket_rec, &temp_type)));
-				b_load_arg (TYUNSIGNEDINT);
-				b_funcall_by_name ("malloc", TYPTR);
-				b_assign(TYPTR);
-				b_pop();
-				break;
-			case CHR_OP:
-				tr_tree_eval(exprIn->u.unop.operand);
-				from_type = tr_get_expr_type(exprIn->u.unop.operand);
-				if( from_type != TYUNSIGNEDCHAR)
-				{
-					b_convert (from_type, TYUNSIGNEDCHAR);
-					exprIn->type = ty_build_basic(TYUNSIGNEDCHAR);
-				}
-				break;
-			case ORD_OP:
-				tr_tree_eval(exprIn->u.unop.operand);
-//				printf("aaaaaaaaaaaaaaaaaaaaaaaa\n");
-				from_type = tr_get_expr_type(exprIn->u.unop.operand);
-				if( from_type != TYSIGNEDLONGINT)
-				{
-
-					b_convert (from_type, TYSIGNEDLONGINT);
-					exprIn->type = ty_build_basic(TYSIGNEDLONGINT);
-				}
-				exprIn->type = exprIn->u.unop.operand->type;
-//				printf("aaaaaaaaaaaaaaaaaaaaaaaa\n");
-				break;
-			case UN_SUCC_OP:
-				tr_tree_eval(exprIn->u.unop.operand);
-
-				from_type = tr_get_expr_type(exprIn->u.unop.operand);
-//				printf("aaaaaaaaaaaaaaaaaaaaaaaa\n");
-				fflush(stdout);
-				if( from_type != TYSIGNEDLONGINT)
-				{
-					b_convert (from_type, TYSIGNEDLONGINT);
-					exprIn->type = ty_build_basic(TYSIGNEDLONGINT);
-				}
-				b_push_const_int (1);
-				b_arith_rel_op (B_ADD, ty_query(exprIn->u.unop.operand->type));
-				exprIn->type = exprIn->u.unop.operand->type;
-//				printf("!!!!!!!!!!!!!!!%d\n", tr_get_expr_type(exprIn));
-				break;
-			case UN_PRED_OP:
-				tr_tree_eval(exprIn->u.unop.operand);
-				from_type = tr_get_expr_type(exprIn->u.unop.operand);
-				if( from_type != TYSIGNEDLONGINT)
-				{
-					b_convert (from_type, TYSIGNEDLONGINT);
-					exprIn->type = ty_build_basic(TYSIGNEDLONGINT);
-				}
-				b_push_const_int (-1);
-				b_arith_rel_op (B_ADD, ty_query(exprIn->type));
-				break;
-			case NEG_OP:
-				tr_tree_eval(exprIn->u.unop.operand);
-				b_negate(tr_get_expr_type(exprIn->u.unop.operand));
-				break;
-			default:
-				break;
-		}
-	}
-//	    ADD_OP, SUB_OP, MUL_OP, DIV_OP, MOD_OP, REALDIV_OP, EQ_OP, LESS_OP, LE_OP,
-//    NE_OP, GE_OP, GREATER_OP, SYMDIFF_OP, OR_OP, XOR_OP, AND_OP, BIN_SUCC_OP,
-	else if( exprIn->tag == BINOP )
-	{
-		if( exprIn->u.binop.left->tag != INTCONST)
-		{
-			tr_tree_eval(exprIn->u.binop.left);
-			temp_type = type_judege(exprIn->u.binop.left->type, exprIn->type);
-			exprIn->type = temp_type;
-			if( tr_get_expr_type(exprIn->u.binop.left) != tr_get_expr_type(exprIn))
-			{
-//				printf("aaaaaaaaaaaaaaaaaaaaaaaa\n");
-				b_convert (tr_get_expr_type(exprIn->u.binop.left), tr_get_expr_type(exprIn));
-			}
-		}
-		else
-		{
-			temp_type = type_judege(exprIn->u.binop.left->type, exprIn->type);
-			exprIn->type = temp_type;
-			exprIn->u.binop.left->type = temp_type;
-			if(ty_query(temp_type) == TYDOUBLE)
-			{
-				exprIn->u.binop.left->tag = REALCONST;
-				exprIn->u.binop.left->u.realval = exprIn->u.binop.left->u.intval;
-			}
-			tr_tree_eval(exprIn->u.binop.left);
-		}
-		
-		if( exprIn->u.binop.right->tag != INTCONST)
-		{
-    		tr_tree_eval(exprIn->u.binop.right);
-    		temp_type = type_judege(exprIn->u.binop.left->type, exprIn->type);
-    		exprIn->type = temp_type;
-    		if( tr_get_expr_type(exprIn->u.binop.right) != tr_get_expr_type(exprIn))
-    		{
-    			b_convert (tr_get_expr_type(exprIn->u.binop.right), tr_get_expr_type(exprIn));
-    		}
-    	}
-    	else
-    	{
-    		temp_type = type_judege(exprIn->u.binop.right->type, exprIn->type);
-			exprIn->type = temp_type;
-			exprIn->u.binop.right->type = temp_type;
-			if(ty_query(temp_type) == TYDOUBLE)
-			{
-				exprIn->u.binop.right->tag = REALCONST;
-				exprIn->u.binop.right->u.realval = exprIn->u.binop.right->u.intval;
-			}
-			tr_tree_eval(exprIn->u.binop.right);
-    	}
-
-		switch( exprIn->u.binop.op ) 
-		{
-			case ADD_OP:
-    			b_arith_rel_op (B_ADD, ty_query(exprIn->type));
-    			break;
-			case SUB_OP:
-    			b_arith_rel_op (B_SUB, ty_query(exprIn->type));
-    			break;
-    		case MUL_OP:
-    			b_arith_rel_op (B_MULT, ty_query(exprIn->type));
-    			break;
-    		case DIV_OP:
-    			b_arith_rel_op (B_DIV, ty_query(exprIn->type));
-    			break;
-    		case MOD_OP:
-    			b_arith_rel_op (B_MOD, ty_query(exprIn->type));
-    			break;
-    			  			
-    		case EQ_OP:
-    			b_arith_rel_op (B_EQ, TYSIGNEDLONGINT);
-    			b_convert (ty_query(exprIn->type), TYSIGNEDCHAR);
-    			exprIn->type = ty_build_basic(TYSIGNEDCHAR);
-    			break;
-			case LESS_OP:
-    			b_arith_rel_op (B_LT, TYSIGNEDLONGINT);
-    			b_convert (ty_query(exprIn->type), TYSIGNEDCHAR);
-    			exprIn->type = ty_build_basic(TYSIGNEDCHAR);
-    			break;
-    		case LE_OP:
-    			b_arith_rel_op (B_LE, TYSIGNEDLONGINT);
-    			b_convert (ty_query(exprIn->type), TYSIGNEDCHAR);
-    			exprIn->type = ty_build_basic(TYSIGNEDCHAR);
-    			break;
-    		case GREATER_OP:
-    			b_arith_rel_op (B_GT, TYSIGNEDLONGINT);
-    			b_convert (ty_query(exprIn->type), TYSIGNEDCHAR);
-    			exprIn->type = ty_build_basic(TYSIGNEDCHAR);
-    			break;
-    		case GE_OP:
-    			b_arith_rel_op (B_GE, TYSIGNEDLONGINT);
-    			b_convert (ty_query(exprIn->type), TYSIGNEDCHAR);
-    			exprIn->type = ty_build_basic(TYSIGNEDCHAR);
-    			break;
-    		case NE_OP:
-    			b_arith_rel_op (B_NE, TYSIGNEDLONGINT);
-    			b_convert (ty_query(exprIn->type), TYSIGNEDCHAR);
-    			exprIn->type = ty_build_basic(TYSIGNEDCHAR);
-    			break;
-	
-			default:
-			break;
-		}
-	}
-	else
-	{
-		
-	}
-}
 
 long tr_eval_const_int(EXPR exprIn)
 {
@@ -991,7 +737,6 @@ P_EXPR_ID tr_make_expr_id(EXPR exprIn, char* id_name, FUNC_HEAD cur_func_head)
 	if( id_name != NULL )
 	{
     	p_expr_id->id = st_lookup_id(id_name);
-//		p_expr_id->id = NULL;
 		if( cur_func_head != NULL )
 		{
     		if(cur_func_head->id != p_expr_id->id)
@@ -1001,10 +746,11 @@ P_EXPR_ID tr_make_expr_id(EXPR exprIn, char* id_name, FUNC_HEAD cur_func_head)
         }
         else
         {
-        	p_expr_id->expr = tr_make_gid_node(id_name);;
+        	p_expr_id->expr = tr_make_gid_node(id_name);
         }
     	stack_rec = st_lookup(p_expr_id->id, &block);
-
+		if( stack_rec == NULL )
+			return NULL;
 		if( stack_rec->tag != FDECL )
 		{
 			b_push_ext_addr(id_name);
@@ -1018,115 +764,6 @@ P_EXPR_ID tr_make_expr_id(EXPR exprIn, char* id_name, FUNC_HEAD cur_func_head)
 	return p_expr_id;
 }
 
-EXPR tr_do_assignment(P_EXPR_ID p_expr_id, EXPR expr_in, FUNC_HEAD cur_func_head)
-{
-	TYPE type_expr_id;
-	ST_ID gid = p_expr_id->id;
-	type_expr_id = tr_get_type_id(gid);
-	TYPETAG to_type = ty_query(type_expr_id);
-	TYPETAG from_type = tr_get_expr_type(expr_in);
-	
-	PARAM_LIST params;
-	BOOLEAN check_args;
-	TYPETAG typefunc;
-	if(cur_func_head != NULL)
-	{ 
-		typefunc = ty_query(ty_query_func(tr_get_type_id(cur_func_head->id), &params, &check_args));
-	}
-	else
-	{
-		typefunc = TYVOID;
-	}
-	if( cur_func_head == NULL )
-	{
-		if( to_type != from_type)
-    	{
-    		b_convert (from_type, to_type);
-    	}
-    	b_assign(to_type);
-    	b_pop();
-	}
-	else if( gid == cur_func_head->id)
-	{
-		b_set_return (typefunc);
-	}
-	else
-	{
-    	if( to_type != from_type)
-    	{
-    		b_convert (from_type, to_type);
-    	}
-    	b_assign(to_type);
-    	b_pop();
-    }
-}
-
-void tr_process_local_vars(void)
-{
-	b_alloc_local_vars (0);
-	return;
-}
-
-void tr_process_func_return(void)
-{
-	b_alloc_local_vars (0);
-	return;
-}
-
-void tr_process_func_head( FUNC_HEAD funchead)
-{
-	TYPE typefunc;
-	PARAM_LIST params;
-	BOOLEAN check_args;
-	typefunc = ty_query_func(tr_get_type_id(funchead->id), &params, &check_args);
-	b_init_formal_param_offset ();
-  	b_func_prologue (funchead->funname);
-	if(ty_query(typefunc) != TYVOID)
-	{
-		b_alloc_return_value ( );
-//		b_alloc_local_vars ( 8 );
-	}
-}
-
-void tr_process_func_tail( FUNC_HEAD funchead)
-{
-	PARAM_LIST params;
-	BOOLEAN check_args;
-	TYPETAG typefunc_tag = ty_query(ty_query_func(tr_get_type_id(funchead->id), &params, &check_args));
-	if( typefunc_tag != TYVOID)
-		b_prepare_return (typefunc_tag);
-	b_func_epilogue (funchead->funname);
-}
-
-void tr_process_actual_para_list(EXPR_LIST exprlistIn)
-{
-	int list_len = 0;
-	EXPR_LIST cur_exprlist = exprlistIn;
-	while(cur_exprlist != NULL)
-	{
-		cur_exprlist = cur_exprlist->next;
-		list_len += 4;
-	}
-//	printf("????????????????????\n");
-	b_alloc_arglist (list_len);
-
-	cur_exprlist = exprlistIn;
-	while(cur_exprlist != NULL)
-	{
-		
-		tr_tree_eval(cur_exprlist->expr);
-		if( ty_query(cur_exprlist->expr->type) == TYVOID)
-		{
-			b_load_arg (TYPTR);
-		}
-		else
-		{
-			b_load_arg (ty_query(cur_exprlist->expr->type));
-		}
-		cur_exprlist = cur_exprlist->next;
-	}
-	return;
-}
 
 #define FUNC_HEAD_STACK_DEPTH 20
 static FUNC_HEAD func_head_stack[FUNC_HEAD_STACK_DEPTH];
@@ -1190,4 +827,138 @@ EXPR_LIST tr_make_exprlist(EXPR_LIST exprlistIn, EXPR exprIn)
 	}
 	
 	
+}
+
+//
+//	CANT_COVERT_NODATA, CANT_SET_RET, DUP_FUNC_EX_FW, EXP_PRCD_NAME, ILLEGAL_CONVERT, 
+//	INCOMPAT_ARG_2_COMP_OP, NONNUM_ARG_2_ARITH_OP, UNDEC_ID,  REQ_1_VALUE_LEFT
+void ty_error_report(ERROR_TYPE error_type, void *input)
+{
+	switch (error_type)
+    {
+    	case CANT_COVERT_NODATA:
+    		error("Cannot convert between nondata types");
+    	break;
+    	case CANT_SET_RET:
+    	break;
+    	case DUP_FUNC_EX_FW:
+    		error("Duplicate forward or external function declaration");
+    	break;
+    	case EXP_PRCD_NAME:
+    		error("Expected procedure name, saw data");
+    	break;
+    	case ILLEGAL_CONVERT:
+    		error("Illegal conversion");
+    	break;
+    	case INCOMPAT_ARG_2_COMP_OP:
+    		error("Incompatible type arguments to comparison operator");
+    	break;
+    	case NONNUM_ARG_2_ARITH_OP:
+    		error("Nonnumerical type argument(s) to arithmetic operation");
+    	break;
+    	case PROC_EXPECTED:
+    		error("Procedure call expected");
+    	break;
+    	case UNDEC_ID:
+    		error("Undeclared identifier \"%s\" in expression", (char*)input);
+    	break;
+    	case REQ_1_VALUE_LEFT:
+    		error("Assignment requires l-value on the left");
+    	break;
+    	default:
+    	break;
+    }
+	return;
+}
+
+BOOLEAN tr_check_proc(EXPR exprIn)
+{
+	BOOLEAN ret = FALSE;
+	if( exprIn != NULL)
+	{
+//		error(">>>>>>>>>>tag:%d", exprIn->tag);
+		if( exprIn->tag == GID)
+		{
+			ty_error_report(EXP_PRCD_NAME, NULL);
+		}
+		else if( exprIn->tag == INTCONST || exprIn->tag == REALCONST
+			|| exprIn->tag == STRCONST)
+		{
+			ty_error_report(PROC_EXPECTED, NULL);
+		}
+		else
+		{
+			ret = TRUE;
+		}
+	}
+	return ret;
+}
+
+BOOLEAN tr_check_assignment(EXPR exprIn)
+{
+	BOOLEAN ret = FALSE;
+	if( exprIn != NULL)
+	{
+//		error(">>>>>>>>>>tag:%d", exprIn->tag);
+		if( exprIn->tag != GID)
+		{
+			ty_error_report(REQ_1_VALUE_LEFT, NULL);
+		}
+		else
+		{
+			ret = TRUE;
+		}
+	}
+	return ret;
+}
+
+BOOLEAN tr_check_convert(TYPETAG tag_from, TYPETAG tag_to)
+{
+	BOOLEAN ret = TRUE;
+	if( tag_to == TYVOID)
+		ret = FALSE;
+	if( tag_from == TYUNSIGNEDLONGINT && tag_to == TYSIGNEDCHAR)
+		ret = FALSE;
+	if( tag_from == TYSIGNEDLONGINT && tag_to == TYSIGNEDCHAR)
+		ret = FALSE;
+	if( tag_from == TYUNSIGNEDLONGINT && tag_to == TYUNSIGNEDCHAR)
+		ret = FALSE;
+	if( tag_from == TYSIGNEDLONGINT && tag_to == TYUNSIGNEDCHAR)
+		ret = FALSE;
+	if( tag_from == TYDOUBLE && tag_to == TYUNSIGNEDLONGINT)
+		ret = FALSE;	
+	if( tag_from == TYDOUBLE && tag_to == TYSIGNEDLONGINT)
+		ret = FALSE;
+	if( tag_from == TYDOUBLE && tag_to == TYSIGNEDCHAR)
+		ret = FALSE;
+	if( tag_from == TYDOUBLE && tag_to == TYUNSIGNEDCHAR)
+		ret = FALSE;
+	if( tag_from == TYFLOAT && tag_to == TYSIGNEDCHAR)
+		ret = FALSE;
+	if( tag_from == TYFLOAT && tag_to == TYUNSIGNEDCHAR)
+		ret = FALSE;
+	if( tag_from == TYUNSIGNEDCHAR && tag_to == TYSIGNEDLONGINT)
+		ret = FALSE;
+
+	return ret;	
+}
+
+BOOLEAN tr_check_numeric(TYPETAG tagIn)
+{
+	BOOLEAN ret = TRUE;
+	if(tagIn == TYUNSIGNEDCHAR)
+		ret = FALSE;
+	if(tagIn == TYSIGNEDCHAR)
+		ret = FALSE;	
+	return ret;	
+}
+
+BOOLEAN tr_check_comp_op(TYPETAG tagIn)
+{
+	BOOLEAN ret = TRUE;
+	if(tagIn == TYUNSIGNEDCHAR)
+		ret = FALSE;
+	if(tagIn == TYSIGNEDCHAR)
+		ret = FALSE;
+	return ret;	
 }

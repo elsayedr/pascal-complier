@@ -975,4 +975,3 @@ static BOOLEAN test_equality(TYPE_REC * type1, TYPE_REC * type2, int ptr_cnt)
 
     bug("How did I get here?");
 }
-	    
