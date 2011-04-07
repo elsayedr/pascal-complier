@@ -7,6 +7,13 @@
 #define MAX_PARAMETER	256
 
 
+/*error type*/
+typedef enum {
+	CANT_COVERT_NODATA, CANT_SET_RET, DUP_FUNC_EX_FW, EXP_PRCD_NAME, ILLEGAL_CONVERT, 
+	INCOMPAT_ARG_2_COMP_OP, NONNUM_ARG_2_ARITH_OP, PROC_EXPECTED, UNDEC_ID,  REQ_1_VALUE_LEFT
+} ERROR_TYPE;
+
+
 /* Used for nonterminal: variable_or_function_access_maybe_assignment
 
    This could be any number of things: a simple variable (identifier) on
@@ -210,8 +217,14 @@ EXPR tr_do_assignment(P_EXPR_ID p_expr_id, EXPR expr_in, FUNC_HEAD cur_func_head
 void tr_funchead_push(FUNC_HEAD head_in);
 FUNC_HEAD tr_funchead_pop();
 FUNC_HEAD tr_funchead_peep();
-void tr_process_func_head( FUNC_HEAD funchead);
-void tr_process_func_tail( FUNC_HEAD funchead);
-void tr_process_local_vars(void);
-void tr_process_actual_para_list(EXPR_LIST exprlistIn);
+
+
+TYPE type_judege(TYPE left, TYPE right);
+
+void ty_error_report(ERROR_TYPE error_type, void *input);
+
+BOOLEAN tr_check_proc(EXPR exprIn);
+BOOLEAN tr_check_assignment(EXPR exprIn);
+BOOLEAN tr_check_convert(TYPETAG tag_from, TYPETAG tag_to);
+BOOLEAN tr_check_numeric(TYPETAG tagIn);
 #endif /* #ifndef PPC_PROJ1_TREE_H_ */
